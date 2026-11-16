@@ -18,20 +18,25 @@ Double-clicking `index.html` also works.
 
 ---
 
-## 2. Deploy (Vercel + Cloudflare DNS + Web3Forms)
+## 2. Deploy (Vercel + Cloudflare DNS)
 
 The folder to deploy contains:
 
 ```
 CRM Demo/
-  index.html        ← the demo (paste your Web3Forms access key into CONFIG first)
+  index.html        ← the demo (already points at your CRM's demo-lead endpoint)
+  og-image.png      ← link-preview image (OCS logo on white), referenced by index.html
   .vercelignore     ← keeps this README off the public site
 ```
+
+Upload all three files. `og-image.png` must sit next to `index.html`, because previews load it from `https://demo.optimizedcompanysystems.com/og-image.png`.
 
 1. In Vercel, create a **separate project** (framework preset "Other", no build command). No environment variables are needed.
 2. Attach `demo.optimizedcompanysystems.com` with a CNAME record in Cloudflare (DNS only, grey cloud).
 
-The whole demo, including the Book a call form, works from a local `python3 -m http.server` too.
+**Search and link previews:** the page carries `noindex`, so Google keeps it out of search results; send people here from your main site instead. It also has Open Graph and Twitter tags, so a shared link shows the OCS logo with the title "OCS CRM — live demo". After deploying, check the preview at opengraph.xyz or LinkedIn's Post Inspector. LinkedIn caches previews, and Post Inspector refreshes them.
+
+The whole demo works from a local `python3 -m http.server` too. The one exception is the Book a call form: the CRM endpoint only accepts requests from `demo.optimizedcompanysystems.com` and Vercel preview URLs, so a submission from localhost is refused and shows "Not sent yet". Test it on a Vercel preview or the live domain.
 
 ## 3. What's in the demo
 
@@ -45,30 +50,28 @@ The whole demo, including the Book a call form, works from a local `python3 -m h
 
 ---
 
-## 4. Book a call → your inbox (Web3Forms)
+## 4. Book a call → your CRM
 
-In the `CONFIG` block near the bottom of `index.html`, set:
+Each request is POSTed as JSON to your CRM's public intake endpoint, set in the `CONFIG` block near the bottom of `index.html`:
 
 ```js
-WEB3FORMS_ACCESS_KEY: 'your-access-key',
+LEAD_ENDPOINTS: ['https://srklbsujjaobzzeqxbol.supabase.co/functions/v1/demo-lead'],
 ```
 
-Web3Forms access keys are designed to be public, so the key can sit in the page.
+The demo holds no keys, no Supabase client and no CRM code. That endpoint is a separate Edge Function on the CRM side. It stores the lead in the same intake table as your website form, with the source "Demo CRM Form", so the lead and its notification appear exactly like a website lead.
 
-Each request arrives by email with the subject "Demo call request — Name (Business)". It contains:
-- Name, business, industry, state, phone and email.
-- Their note.
-- Where they clicked Book a call.
-- A summary of what they explored: time on the demo, screens by time, milestones reached, client views opened, and "Built to your workflow" screens viewed.
+What's sent:
+- Name, business, phone, email, state (2-letter code), industry and their note.
+- `opened_from`: where they clicked Book a call.
+- `journey`: what they explored — time on the demo, screens by time, path, milestones reached, client views opened, "Built to your workflow" screens viewed, device, viewport, landing page, referrer and UTM tags.
 
 The form also:
-- Drops bots that fill its hidden honeypot field.
-- Shows "Not sent yet" with a **Send again** button if Web3Forms can't be reached.
-- Tells the visitor it isn't connected if no key has been set, rather than losing the request silently.
+- Drops bots that fill its hidden honeypot field, so they're never sent.
+- Shows "Not sent yet" with a **Send again** button if the endpoint can't be reached or refuses the request.
+- Handles the endpoint's rate limit (one request per minute per connection) with a "we received a request from you moments ago" message instead of a generic error.
+- Tells the visitor it isn't connected if `LEAD_ENDPOINTS` is empty, rather than losing the request silently.
 
-Optional settings:
-- `LEAD_ENDPOINTS`: URLs that also receive each request as JSON, for example a lead-intake endpoint on your CRM.
-- `BOOK_A_CALL_URL`: a Cal.com or Calendly link that opens after submitting, with the name and email filled in.
+Optional: `BOOK_A_CALL_URL`, a Cal.com or Calendly link that opens after submitting, with the name and email filled in.
 
 ## 5. Analytics (Plausible)
 
@@ -129,7 +132,7 @@ React 18 and htm are inlined in the file, along with the logos and loader animat
 | `https://cdn.jsdelivr.net` | jsPDF, jspdf-autotable, signature_pad, Leaflet (JS + CSS) | Only when a PDF, the signing page or a map is first needed |
 | `https://tile.openstreetmap.org` | Map tiles | Only when a map is shown |
 | `https://plausible.io` | Analytics | Only if `ANALYTICS.domain` is set |
-| `https://api.web3forms.com`, plus your calendar host if set | Book-a-call submission | Only when someone submits Book a call |
+| `https://srklbsujjaobzzeqxbol.supabase.co`, plus your calendar host if set | Book-a-call submission | Only when someone submits Book a call |
 
 ```
 default-src 'self';
@@ -137,7 +140,7 @@ script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://plausible.io;
 style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
 img-src 'self' data: blob: https://tile.openstreetmap.org;
 media-src 'self' blob: data:;
-connect-src 'self' https://plausible.io https://api.web3forms.com;
+connect-src 'self' https://plausible.io https://srklbsujjaobzzeqxbol.supabase.co;
 frame-src 'self' blob:;
 ```
 
